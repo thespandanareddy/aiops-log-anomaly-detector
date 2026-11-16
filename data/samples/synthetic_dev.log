@@ -1,0 +1,9 @@
+081109 203518 143 INFO dfs.DataNode$DataXceiver: Receiving block blk_1001 src: /10.250.19.102:54106 dest: /10.250.19.102:50010
+081109 203519 143 INFO dfs.DataNode$BlockReceiver: PacketResponder 1 for block blk_1001 terminating
+081109 203520 143 INFO dfs.DataNode$BlockReceiver: Received block blk_1001 of size 67108864 from /10.250.19.102
+081109 203521 144 INFO dfs.DataNode$DataXceiver: Receiving block blk_1002 src: /10.250.19.103:54107 dest: /10.250.19.103:50010
+081109 203522 144 INFO dfs.DataNode$BlockReceiver: PacketResponder 2 for block blk_1002 terminating
+081109 203523 144 INFO dfs.DataNode$BlockReceiver: Received block blk_1002 of size 67108864 from /10.250.19.103
+081109 203524 145 INFO dfs.DataNode$DataXceiver: Receiving block blk_9999 src: /10.250.19.104:54108 dest: /10.250.19.104:50010
+081109 203525 145 ERROR dfs.DataNode$BlockReceiver: Verification failed for block blk_9999 checksum mismatch
+081109 203526 145 WARN dfs.DataNode$DataXceiver: Execution failed unexpected EOF for block blk_9999
