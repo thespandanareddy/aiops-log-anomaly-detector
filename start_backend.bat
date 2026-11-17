@@ -1,9 +1,9 @@
 @echo off
-title AIOps Detector - FastAPI Backend Only
+title AIOps Detector - FastAPI Backend
 cd /d "%~dp0"
 
 echo ========================================================
-echo   AIOps Detector - FastAPI REST Backend Only
+echo   AIOps Detector - FastAPI REST Backend
 echo   Starting server on http://127.0.0.1:8000
 echo   OpenAPI Docs: http://127.0.0.1:8000/docs
 echo ========================================================
@@ -20,8 +20,15 @@ if exist "C:\Users\Admin\anaconda3\envs\mlproject\python.exe" (
     set "PYTHON_EXE=python"
 )
 
-echo Using Python: %PYTHON_EXE%
-start "" "http://127.0.0.1:8000/docs"
+echo [OK] Using Python: %PYTHON_EXE%
+echo.
+echo ========================================================
+echo   FastAPI Swagger UI: http://127.0.0.1:8000/docs
+echo   Health Check:       http://127.0.0.1:8000/api/health
+echo   (Keep this window open while using the API)
+echo ========================================================
+echo.
+
 "%PYTHON_EXE%" -m uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
 
 pause

@@ -1,5 +1,5 @@
 @echo off
-title AIOps Log Anomaly Detector - Dashboard Only
+title AIOps Log Anomaly Detector - Dashboard
 cd /d "%~dp0"
 
 echo ========================================================
@@ -19,9 +19,15 @@ if exist "C:\Users\Admin\anaconda3\envs\mlproject\python.exe" (
     set "PYTHON_EXE=python"
 )
 
-echo Using Python: %PYTHON_EXE%
-echo Starting Streamlit Dashboard on http://localhost:8501 ...
-start "" "http://localhost:8501"
-"%PYTHON_EXE%" -m streamlit run dashboard\app.py --server.port 8501 --server.headless false
+echo [OK] Using Python: %PYTHON_EXE%
+echo Starting Streamlit Dashboard on http://127.0.0.1:8501 ...
+echo.
+echo ========================================================
+echo   Dashboard URL: http://127.0.0.1:8501
+echo   (Keep this window open while using the application)
+echo ========================================================
+echo.
+
+"%PYTHON_EXE%" -m streamlit run dashboard\app.py --server.port 8501 --server.headless false --server.address 127.0.0.1
 
 pause
