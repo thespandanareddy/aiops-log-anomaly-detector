@@ -184,6 +184,28 @@ def render_table(df, use_container_width=True):
             st.write(df)
 
 
+def format_percent(val, default="N/A", digits=1):
+    """Safely format a ratio (0.0-1.0) as percentage or return default when None or invalid."""
+    if val is None:
+        return default
+    try:
+        f = float(val)
+        return f"{f * 100:.{digits}f}%"
+    except (ValueError, TypeError):
+        return default
+
+
+def format_float(val, default="N/A", digits=2):
+    """Safely format a float or return default when None or invalid."""
+    if val is None:
+        return default
+    try:
+        f = float(val)
+        return f"{f:.{digits}f}"
+    except (ValueError, TypeError):
+        return default
+
+
 def apply_dark_plotly_theme(fig, height=320, title=None):
     """Applies enterprise dark theme to any Plotly chart."""
     fig.update_layout(
@@ -347,11 +369,12 @@ if nav_choice == "System Overview":
             unsafe_allow_html=True
         )
     with k3:
+        avg_risk_disp = format_float(stats.get('average_risk_score'), default="0.0", digits=1)
         st.markdown(
             f"""
             <div class='metric-card'>
                 <div class='kpi-title'>Average Risk Score</div>
-                <div class='kpi-val'>{stats.get('average_risk_score', 0):.1f}<span style='font-size: 14px; color: #94A3B8;'> / 100</span></div>
+                <div class='kpi-val'>{avg_risk_disp}<span style='font-size: 14px; color: #94A3B8;'> / 100</span></div>
                 <div class='kpi-sub'>Calibrated sequential & volumetric</div>
             </div>
             """,
@@ -445,24 +468,29 @@ if nav_choice == "System Overview":
                 else "#3B82F6"
             )
 
-            with st.expander(f"[{sev}] Session {a['session_id']} | Risk: {a['risk_score']:.1f}/100 | {a['timestamp']}"):
+            risk_val = a.get("risk_score")
+            risk_disp = format_float(risk_val, default="0.0", digits=1)
+            sess_id = a.get("session_id", "Unknown")
+            ts = a.get("timestamp", "")
+
+            with st.expander(f"[{sev}] Session {sess_id} | Risk: {risk_disp}/100 | {ts}"):
                 st.markdown(
                     f"""
                     <div style='background-color: #1B2738; border: 1px solid {border_color}; border-left: 4px solid {border_color}; border-radius: 6px; padding: 14px;'>
                         <div style='display: flex; justify-content: space-between; align-items: center;'>
                             <div>
                                 <span class='{sev_badge_class}'>{sev}</span>
-                                <span style='font-weight: 600; color: #F1F5F9; margin-left: 8px;'>Session <code>{a['session_id']}</code></span>
-                                <span style='font-size: 12px; color: #94A3B8; margin-left: 8px;'>Source: {a['log_source']}</span>
+                                <span style='font-weight: 600; color: #F1F5F9; margin-left: 8px;'>Session <code>{sess_id}</code></span>
+                                <span style='font-size: 12px; color: #94A3B8; margin-left: 8px;'>Source: {a.get('log_source', '')}</span>
                             </div>
-                            <div style='font-size: 14px; font-weight: 700; color: {border_color};'>Risk Score: {a['risk_score']:.1f}/100</div>
+                            <div style='font-size: 14px; font-weight: 700; color: {border_color};'>Risk Score: {risk_disp}/100</div>
                         </div>
                         <div class='explanation-box'>
                             <div style='font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #3B82F6; margin-bottom: 4px;'>Diagnostic Summary</div>
-                            <div>{a['explanation']}</div>
+                            <div>{a.get('explanation', '')}</div>
                         </div>
                         <div style='font-size: 11.5px; color: #64748B;'>
-                            Sequence Score: {a.get('sequence_score')} | Autoencoder Score: {a.get('ae_score')} | Status: {a.get('status')} | Logged: {a['timestamp']}
+                            Sequence Score: {format_float(a.get('sequence_score'), default='N/A', digits=3)} | Autoencoder Score: {format_float(a.get('ae_score'), default='N/A', digits=3)} | Status: {a.get('status', 'NEW')} | Logged: {ts}
                         </div>
                     </div>
                     """,
@@ -574,8 +602,9 @@ elif nav_choice == "Live Log Analyzer":
             if alerts:
                 st.markdown(f"<div style='font-size: 16px; font-weight: 700; color: #EF4444; margin-top: 14px; margin-bottom: 12px;'>Detected {len(alerts)} Anomaly Alert(s)</div>", unsafe_allow_html=True)
                 for a in alerts:
-                    sev = a["severity"]
-                    risk = a["risk_score"]
+                    sev = a.get("severity", "LOW")
+                    risk_val = a.get("risk_score")
+                    risk_disp = format_float(risk_val, default="0.0", digits=1)
                     color = "#EF4444" if sev in ["CRITICAL", "HIGH"] else "#F59E0B" if sev == "MEDIUM" else "#3B82F6"
                     badge_class = (
                         "badge-critical" if sev == "CRITICAL"
@@ -590,16 +619,16 @@ elif nav_choice == "Live Log Analyzer":
                             <div style='display: flex; justify-content: space-between; align-items: center;'>
                                 <div>
                                     <span class='{badge_class}'>{sev}</span>
-                                    <span style='font-weight: 700; font-size: 15px; color: #F1F5F9; margin-left: 10px;'>Alert: Session <code>{a['session_id']}</code></span>
+                                    <span style='font-weight: 700; font-size: 15px; color: #F1F5F9; margin-left: 10px;'>Alert: Session <code>{a.get('session_id', 'Unknown')}</code></span>
                                 </div>
                                 <div>
-                                    <span style='font-size: 20px; font-weight: 700; color: {color};'>{risk:.1f}</span>
+                                    <span style='font-size: 20px; font-weight: 700; color: {color};'>{risk_disp}</span>
                                     <span style='font-size: 12px; color: #94A3B8;'> / 100 Risk Score</span>
                                 </div>
                             </div>
                             <div class='explanation-box'>
                                 <div style='font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #3B82F6; margin-bottom: 4px;'>Plain-English Diagnostic</div>
-                                <div>{a['explanation']}</div>
+                                <div>{a.get('explanation', '')}</div>
                             </div>
                         </div>
                         """,
@@ -662,13 +691,15 @@ elif nav_choice == "Alert History & Audit":
     if alerts_list:
         table_data = []
         for r in alerts_list:
+            risk_val = r.get("risk_score")
+            risk_disp = format_float(risk_val, default="0.0", digits=1)
             table_data.append({
                 "ID": r["id"],
-                "Timestamp": r["timestamp"],
-                "Session ID": r["session_id"],
-                "Source": r["log_source"],
-                "Severity": r["severity"],
-                "Risk Score": f"{r['risk_score']:.1f}",
+                "Timestamp": r.get("timestamp", ""),
+                "Session ID": r.get("session_id", "Unknown"),
+                "Source": r.get("log_source", ""),
+                "Severity": r.get("severity", "LOW"),
+                "Risk Score": risk_disp,
                 "Status": r.get("status", "NEW"),
             })
         render_table(pd.DataFrame(table_data), use_container_width=True)
@@ -701,11 +732,12 @@ elif nav_choice == "Alert History & Audit":
             # Metrics Row
             d1, d2, d3, d4 = st.columns(4)
             with d1:
+                risk_disp = format_float(chosen.get('risk_score'), default="N/A", digits=1)
                 st.markdown(
                     f"""
                     <div class='metric-card'>
                         <div class='kpi-title'>Calibrated Risk</div>
-                        <div class='kpi-val' style='color: {accent};'>{chosen['risk_score']:.1f}<span style='font-size: 13px; color: #94A3B8;'> / 100</span></div>
+                        <div class='kpi-val' style='color: {accent};'>{risk_disp}<span style='font-size: 13px; color: #94A3B8;'> / 100</span></div>
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -721,21 +753,23 @@ elif nav_choice == "Alert History & Audit":
                     unsafe_allow_html=True
                 )
             with d3:
+                seq_disp = format_float(chosen.get('sequence_score'), default="N/A", digits=3)
                 st.markdown(
                     f"""
                     <div class='metric-card'>
                         <div class='kpi-title'>Sequence Score (LSTM)</div>
-                        <div class='kpi-val'>{chosen.get('sequence_score', 0):.3f}</div>
+                        <div class='kpi-val'>{seq_disp}</div>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
             with d4:
+                ae_disp = format_float(chosen.get('ae_score'), default="N/A", digits=3)
                 st.markdown(
                     f"""
                     <div class='metric-card'>
                         <div class='kpi-title'>Autoencoder Score (MSE)</div>
-                        <div class='kpi-val'>{chosen.get('ae_score', 0):.3f}</div>
+                        <div class='kpi-val'>{ae_disp}</div>
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -779,7 +813,7 @@ elif nav_choice == "Concept Drift Monitor":
 
     if drift_records:
         latest = drift_records[0]
-        cur_status = latest["drift_status"]
+        cur_status = latest.get("drift_status", "STABLE")
         status_color = "#10B981" if cur_status == "STABLE" else "#F59E0B" if "MODERATE" in cur_status else "#EF4444"
 
         m1, m2, m3, m4 = st.columns(4)
@@ -795,22 +829,24 @@ elif nav_choice == "Concept Drift Monitor":
                 unsafe_allow_html=True
             )
         with m2:
+            psi_disp = format_float(latest.get('psi_score'), default="0.0000", digits=4)
             st.markdown(
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>Population Stability Index</div>
-                    <div class='kpi-val'>{latest['psi_score']:.4f}</div>
+                    <div class='kpi-val'>{psi_disp}</div>
                     <div class='kpi-sub'>Threshold: 0.10 Mod / 0.20 Sig</div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
         with m3:
+            nov_disp = format_percent(latest.get('novel_template_ratio'), default="0.0%", digits=1)
             st.markdown(
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>Novel Template Ratio</div>
-                    <div class='kpi-val'>{latest['novel_template_ratio']*100:.1f}%</div>
+                    <div class='kpi-val'>{nov_disp}</div>
                     <div class='kpi-sub'>Unseen log pattern frequency</div>
                 </div>
                 """,
@@ -869,44 +905,49 @@ elif nav_choice == "Model Retraining & Refresh":
     if active_meta:
         m1, m2, m3, m4 = st.columns(4)
         with m1:
+            ver_disp = active_meta.get("version") or "v1.0.0-baseline"
+            trained_disp = active_meta.get("trained_at") or "Baseline"
             st.markdown(
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>Active Model Version</div>
-                    <div class='kpi-val' style='font-size: 20px; color: #3B82F6;'>{active_meta['version']}</div>
-                    <div class='kpi-sub'>Trained: {active_meta.get('trained_at', 'Baseline')}</div>
+                    <div class='kpi-val' style='font-size: 20px; color: #3B82F6;'>{ver_disp}</div>
+                    <div class='kpi-sub'>Trained: {trained_disp}</div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
         with m2:
+            mtype_disp = (active_meta.get("model_type") or "BASELINE").upper()
             st.markdown(
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>Architecture</div>
-                    <div class='kpi-val' style='font-size: 20px;'>{active_meta['model_type'].upper()}</div>
+                    <div class='kpi-val' style='font-size: 20px;'>{mtype_disp}</div>
                     <div class='kpi-sub'>DeepLog LSTM + Volumetric AE</div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
         with m3:
+            vocab_disp = str(active_meta.get("total_templates")) if active_meta.get("total_templates") is not None else "N/A"
             st.markdown(
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>Vocabulary Dimension</div>
-                    <div class='kpi-val'>{active_meta['total_templates']}</div>
+                    <div class='kpi-val'>{vocab_disp}</div>
                     <div class='kpi-sub'>Unique Drain3 templates</div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
         with m4:
+            th_seq_disp = format_float(active_meta.get("threshold_sequence"), default="N/A", digits=3)
             st.markdown(
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>Calibrated Threshold</div>
-                    <div class='kpi-val'>{active_meta.get('threshold_sequence', 0.5):.3f}</div>
+                    <div class='kpi-val'>{th_seq_disp}</div>
                     <div class='kpi-sub'>Optimal F1 decision boundary</div>
                 </div>
                 """,
@@ -915,12 +956,22 @@ elif nav_choice == "Model Retraining & Refresh":
 
         st.markdown("<div style='font-size: 14px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 14px; margin-bottom: 8px;'>Validation Benchmarks</div>", unsafe_allow_html=True)
         mb1, mb2, mb3, mb4 = st.columns(4)
+
+        val_f1_disp = format_percent(active_meta.get("val_f1"), default="N/A", digits=1)
+        val_prec_disp = format_percent(active_meta.get("val_precision"), default="N/A", digits=1)
+        val_rec_disp = format_percent(active_meta.get("val_recall"), default="N/A", digits=1)
+        val_fpr_disp = format_percent(active_meta.get("val_fpr"), default="N/A", digits=1)
+
+        f1_color = "#10B981" if val_f1_disp != "N/A" else "#94A3B8"
+        fpr_color = "#3B82F6" if val_fpr_disp != "N/A" else "#94A3B8"
+
         with mb1:
             st.markdown(
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>Validation F1-Score</div>
-                    <div class='kpi-val' style='color: #10B981;'>{active_meta.get('val_f1', 0)*100:.1f}%</div>
+                    <div class='kpi-val' style='color: {f1_color};'>{val_f1_disp}</div>
+                    <div class='kpi-sub'>Supervised benchmark</div>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -930,7 +981,8 @@ elif nav_choice == "Model Retraining & Refresh":
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>Validation Precision</div>
-                    <div class='kpi-val'>{active_meta.get('val_precision', 0)*100:.1f}%</div>
+                    <div class='kpi-val'>{val_prec_disp}</div>
+                    <div class='kpi-sub'>Positive predictive value</div>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -940,7 +992,8 @@ elif nav_choice == "Model Retraining & Refresh":
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>Validation Recall</div>
-                    <div class='kpi-val'>{active_meta.get('val_recall', 0)*100:.1f}%</div>
+                    <div class='kpi-val'>{val_rec_disp}</div>
+                    <div class='kpi-sub'>True positive rate</div>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -950,11 +1003,22 @@ elif nav_choice == "Model Retraining & Refresh":
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>False Positive Rate</div>
-                    <div class='kpi-val' style='color: #3B82F6;'>{active_meta.get('val_fpr', 0)*100:.1f}%</div>
+                    <div class='kpi-val' style='color: {fpr_color};'>{val_fpr_disp}</div>
+                    <div class='kpi-sub'>False alarm frequency</div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
+    else:
+        st.markdown(
+            """
+            <div style='background-color: #141E2D; border: 1px solid #243347; border-radius: 6px; padding: 14px 18px; margin-bottom: 14px;'>
+                <div style='font-size: 14px; font-weight: 600; color: #94A3B8;'>No Active Model Metadata Available</div>
+                <div style='font-size: 12.5px; color: #64748B; margin-top: 2px;'>Baseline model initialization is in progress or awaiting configuration.</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
     st.markdown(
@@ -1038,16 +1102,27 @@ elif nav_choice == "Benchmark Evaluation (Loghub)":
                 ae_epochs=10,
             )
 
-        test_m = train_res["test_metrics"]
+        test_m = train_res.get("test_metrics", {})
         st.markdown("<div style='font-size: 16px; font-weight: 700; color: #F1F5F9; margin-top: 14px; margin-bottom: 10px;'>Held-Out Test Split Metrics (Newest 20% Unseen Logs)</div>", unsafe_allow_html=True)
 
         r1, r2, r3, r4 = st.columns(4)
+        prec_disp = format_percent(test_m.get("precision"), default="N/A", digits=1)
+        rec_disp = format_percent(test_m.get("recall"), default="N/A", digits=1)
+        
+        f1_val = test_m.get("f1_score")
+        f1_disp = format_percent(f1_val, default="N/A", digits=1)
+        f1_color = "#10B981" if (f1_val is not None and f1_val >= 0.90) else "#3B82F6" if f1_disp != "N/A" else "#94A3B8"
+
+        fpr_val = test_m.get("false_positive_rate")
+        fpr_disp = format_percent(fpr_val, default="N/A", digits=1)
+        fpr_color = "#10B981" if (fpr_val is not None and fpr_val <= 0.10) else "#F59E0B" if fpr_disp != "N/A" else "#94A3B8"
+
         with r1:
             st.markdown(
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>Precision</div>
-                    <div class='kpi-val'>{test_m['precision']*100:.1f}%</div>
+                    <div class='kpi-val'>{prec_disp}</div>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -1057,30 +1132,28 @@ elif nav_choice == "Benchmark Evaluation (Loghub)":
                 f"""
                 <div class='metric-card'>
                     <div class='kpi-title'>Recall</div>
-                    <div class='kpi-val'>{test_m['recall']*100:.1f}%</div>
+                    <div class='kpi-val'>{rec_disp}</div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
         with r3:
-            f1_color = "#10B981" if test_m["f1_score"] >= 0.90 else "#3B82F6"
             st.markdown(
                 f"""
                 <div class='metric-card' style='border-top: 3px solid {f1_color};'>
                     <div class='kpi-title'>F1-Score</div>
-                    <div class='kpi-val' style='color: {f1_color};'>{test_m['f1_score']*100:.1f}%</div>
+                    <div class='kpi-val' style='color: {f1_color};'>{f1_disp}</div>
                     <div class='kpi-sub'>Target: >= 90.0%</div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
         with r4:
-            fpr_color = "#10B981" if test_m["false_positive_rate"] <= 0.10 else "#F59E0B"
             st.markdown(
                 f"""
                 <div class='metric-card' style='border-top: 3px solid {fpr_color};'>
                     <div class='kpi-title'>False Positive Rate</div>
-                    <div class='kpi-val' style='color: {fpr_color};'>{test_m['false_positive_rate']*100:.1f}%</div>
+                    <div class='kpi-val' style='color: {fpr_color};'>{fpr_disp}</div>
                     <div class='kpi-sub'>Target: <= 10.0%</div>
                 </div>
                 """,
