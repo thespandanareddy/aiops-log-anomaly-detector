@@ -1,22 +1,24 @@
 @echo off
-title AIOps Log Anomaly Detector
+title AIOps Log Anomaly Detector - Dashboard
 cd /d "%~dp0"
 
 echo ========================================================
 echo   Drift-Aware, Explainable AIOps Log Anomaly Detector
-echo   Starting application in offline-ready local mode...
+echo   Starting application on F:\AIOps_Log_Anomaly_Detector
 echo ========================================================
 echo.
 
 set PYTHON_EXE=C:\Users\Admin\anaconda3\envs\mlproject\python.exe
 
 if not exist "%PYTHON_EXE%" (
-    echo Python environment not found at: %PYTHON_EXE%
-    echo Please make sure the conda environment 'mlproject' is installed.
-    pause
-    exit /b 1
+    if defined CONDA_PREFIX (
+        set PYTHON_EXE=%CONDA_PREFIX%\python.exe
+    ) else (
+        set PYTHON_EXE=python
+    )
 )
 
+echo Using Python: %PYTHON_EXE%
 echo Starting Streamlit Dashboard on http://localhost:8501...
 echo (Press Ctrl+C to stop)
 echo.
