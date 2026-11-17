@@ -1,7 +1,6 @@
 """
-Streamlit Monitoring Dashboard for Drift-Aware, Explainable AIOps Log Anomaly Detector.
-Provides interactive visualization, log analysis, searchable alert audit trail,
-concept drift metrics, model retraining, and Loghub benchmark evaluation.
+Enterprise AIOps Log Anomaly Detection Platform.
+Drift-Aware, Explainable, CPU-Optimized Observability Dashboard.
 """
 
 from datetime import datetime
@@ -9,6 +8,8 @@ import io
 import json
 from pathlib import Path
 import sys
+from typing import Any, Dict, List, Optional
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -27,7 +28,7 @@ from src.ingestion.log_loader import LogRecord, get_log_loader
 from src.pipeline import pipeline
 
 # -------------------------------------------------------------
-# Streamlit Page Config & Custom Styling
+# Streamlit Page Config & Theme Settings
 # -------------------------------------------------------------
 st.set_page_config(
     page_title="AIOps Log Anomaly Detector",
@@ -35,35 +36,121 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Clean, professional styling
-st.markdown(
-    """
-    <style>
-    .metric-card {
-        background-color: #f8f9fa;
-        border-radius: 8px;
-        padding: 16px;
-        border: 1px solid #e9ecef;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .badge-critical { background-color: #dc3545; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .badge-high { background-color: #fd7e14; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .badge-medium { background-color: #ffc107; color: black; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .badge-low { background-color: #17a2b8; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .badge-normal { background-color: #28a745; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .explanation-box {
-        background-color: #eef2f7;
-        border-left: 4px solid #0d6efd;
-        padding: 12px 16px;
-        border-radius: 4px;
-        font-size: 15px;
-        line-height: 1.5;
-        margin-bottom: 12px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# Enterprise Dark Theme CSS
+CUSTOM_DARK_CSS = """
+<style>
+/* Global Canvas & Typography */
+html, body, [data-testid="stAppViewContainer"] {
+    background-color: #101827 !important;
+    color: #F1F5F9 !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+[data-testid="stSidebar"] {
+    background-color: #1B2738 !important;
+    border-right: 1px solid #243347 !important;
+}
+
+[data-testid="stSidebar"] * {
+    color: #F1F5F9 !important;
+}
+
+/* Card and Container Styling */
+.metric-card {
+    background-color: #1B2738;
+    border: 1px solid #243347;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+}
+
+.kpi-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #94A3B8;
+    margin-bottom: 4px;
+}
+
+.kpi-val {
+    font-size: 26px;
+    font-weight: 700;
+    color: #F1F5F9;
+    line-height: 1.2;
+}
+
+.kpi-sub {
+    font-size: 11.5px;
+    color: #64748B;
+    margin-top: 4px;
+}
+
+/* Alert Severity Badges */
+.badge-critical { background-color: #EF4444; color: white; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; }
+.badge-high { background-color: #F97316; color: white; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; }
+.badge-medium { background-color: #F59E0B; color: black; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; }
+.badge-low { background-color: #3B82F6; color: white; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; }
+.badge-normal { background-color: #10B981; color: white; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; }
+
+/* Explanation Box */
+.explanation-box {
+    background-color: #141E2D;
+    border: 1px solid #243347;
+    border-left: 4px solid #3B82F6;
+    padding: 14px 18px;
+    border-radius: 6px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: #E2E8F0;
+    margin-top: 10px;
+    margin-bottom: 12px;
+}
+
+/* Streamlit Inputs & Selectors */
+[data-baseweb="select"] > div {
+    background-color: #1B2738 !important;
+    border-color: #243347 !important;
+    color: #F1F5F9 !important;
+}
+
+textarea, input[type="text"] {
+    background-color: #141E2D !important;
+    border: 1px solid #243347 !important;
+    color: #F1F5F9 !important;
+    border-radius: 6px !important;
+}
+
+/* Table container styling */
+div[data-testid="stTable"], div[data-testid="stDataFrame"] {
+    background-color: #1B2738;
+    border: 1px solid #243347;
+    border-radius: 8px;
+    padding: 4px;
+}
+
+/* Button overrides */
+button[kind="primary"] {
+    background-color: #3B82F6 !important;
+    border-color: #3B82F6 !important;
+    color: white !important;
+    font-weight: 600 !important;
+}
+
+button[kind="primary"]:hover {
+    background-color: #2563EB !important;
+    border-color: #2563EB !important;
+}
+
+button[kind="secondary"] {
+    background-color: #1B2738 !important;
+    border: 1px solid #243347 !important;
+    color: #F1F5F9 !important;
+}
+</style>
+"""
+st.markdown(CUSTOM_DARK_CSS, unsafe_allow_html=True)
+
 
 # -------------------------------------------------------------
 # Initialize DB & Model on Startup
@@ -72,7 +159,6 @@ st.markdown(
 def initialize_system():
     db.init_db()
     create_synthetic_dev_dataset()
-    # Check if baseline model exists or train initial baseline
     active = db.get_active_model_metadata()
     if not active or not pipeline.is_trained:
         try:
@@ -86,6 +172,7 @@ def initialize_system():
 
 initialize_system()
 
+
 def render_table(df, use_container_width=True):
     """Safely render tables with st.dataframe and fallback if needed."""
     try:
@@ -96,16 +183,82 @@ def render_table(df, use_container_width=True):
         except Exception:
             st.write(df)
 
+
+def apply_dark_plotly_theme(fig, height=320, title=None):
+    """Applies enterprise dark theme to any Plotly chart."""
+    fig.update_layout(
+        paper_bgcolor="#1B2738",
+        plot_bgcolor="#1B2738",
+        font=dict(color="#F1F5F9", family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif", size=12),
+        title=dict(text=title, font=dict(color="#F1F5F9", size=14, family="sans-serif")) if title else None,
+        margin=dict(l=20, r=20, t=40 if title else 20, b=20),
+        height=height,
+        legend=dict(
+            font=dict(color="#94A3B8", size=11),
+            bgcolor="rgba(0,0,0,0)",
+        ),
+    )
+    fig.update_xaxes(
+        gridcolor="#243347",
+        linecolor="#243347",
+        tickfont=dict(color="#94A3B8", size=11),
+        title_font=dict(color="#94A3B8", size=12),
+    )
+    fig.update_yaxes(
+        gridcolor="#243347",
+        linecolor="#243347",
+        tickfont=dict(color="#94A3B8", size=11),
+        title_font=dict(color="#94A3B8", size=12),
+    )
+    return fig
+
+
+def render_header(title: str, description: str, status_badge: str = "SYSTEM HEALTHY", badge_color: str = "#10B981"):
+    """Render unified top header bar for each page."""
+    st.markdown(
+        f"""
+        <div style='display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid #243347;'>
+            <div>
+                <div style='font-size: 22px; font-weight: 700; color: #F1F5F9; letter-spacing: -0.02em; margin-bottom: 4px;'>{title}</div>
+                <div style='font-size: 13.5px; color: #94A3B8;'>{description}</div>
+            </div>
+            <div style='display: flex; align-items: center; gap: 8px; background-color: #1B2738; padding: 6px 14px; border-radius: 6px; border: 1px solid #243347;'>
+                <span style='height: 8px; width: 8px; border-radius: 50%; background-color: {badge_color}; display: inline-block;'></span>
+                <span style='font-size: 11px; font-weight: 700; color: #F1F5F9; letter-spacing: 0.06em; text-transform: uppercase;'>{status_badge}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
 # -------------------------------------------------------------
-# Sidebar Navigation
+# Sidebar Navigation & Telemetry
 # -------------------------------------------------------------
-st.sidebar.title("AIOps Anomaly Detector")
-st.sidebar.caption("Drift-Aware, Explainable CPU Log Monitoring")
+st.sidebar.markdown(
+    """
+    <div style='margin-bottom: 16px;'>
+        <div style='font-size: 17px; font-weight: 700; color: #F1F5F9; letter-spacing: -0.01em;'>AIOps Log Monitor</div>
+        <div style='font-size: 12px; color: #94A3B8;'>Drift-Aware, Explainable CPU Platform</div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 active_model = db.get_active_model_metadata()
-active_ver = active_model["version"] if active_model else "v1.0.0-uninitialized"
-st.sidebar.markdown(f"**Model:** `{active_ver}`")
-st.sidebar.markdown(f"**Templates:** `{len(pipeline.drain_parser.get_all_templates())}`")
+active_ver = active_model["version"] if active_model else "v1.0.0-baseline"
+template_count = len(pipeline.drain_parser.get_all_templates())
+
+# Model and Engine telemetry pills
+st.sidebar.markdown(
+    f"""
+    <div style='display: flex; gap: 8px; margin-bottom: 16px;'>
+        <span style='background-color: #141E2D; border: 1px solid #243347; color: #3B82F6; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px;'>{active_ver}</span>
+        <span style='background-color: #141E2D; border: 1px solid #243347; color: #14B8A6; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px;'>{template_count} Templates</span>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 nav_choice = st.sidebar.radio(
     "Navigation Menu",
@@ -116,58 +269,128 @@ nav_choice = st.sidebar.radio(
         "Concept Drift Monitor",
         "Model Retraining & Refresh",
         "Benchmark Evaluation (Loghub)",
-    ]
+    ],
+    label_visibility="collapsed"
 )
 
-st.sidebar.divider()
-st.sidebar.info(
-    "**Key Principles**\n"
-    "- CPU-Optimized PyTorch\n"
-    "- Dual-Perspective (LSTM + AE)\n"
-    "- Plain-English Explanations\n"
-    "- Zero Random Shuffling Split\n"
-    "- Persistent SQLite Storage"
+st.sidebar.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
+
+# System Health & Component Status Panel
+st.sidebar.markdown(
+    """
+    <div style='background-color: #141E2D; border: 1px solid #243347; border-radius: 6px; padding: 12px; font-size: 11.5px;'>
+        <div style='font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;'>System Posture</div>
+        <div style='display: flex; justify-content: space-between; margin-bottom: 4px;'>
+            <span style='color: #94A3B8;'>Inference Engine:</span>
+            <span style='color: #10B981; font-weight: 600;'>PyTorch CPU</span>
+        </div>
+        <div style='display: flex; justify-content: space-between; margin-bottom: 4px;'>
+            <span style='color: #94A3B8;'>Parser Core:</span>
+            <span style='color: #3B82F6; font-weight: 600;'>Drain3 Streaming</span>
+        </div>
+        <div style='display: flex; justify-content: space-between; margin-bottom: 4px;'>
+            <span style='color: #94A3B8;'>Audit Storage:</span>
+            <span style='color: #F1F5F9; font-weight: 600;'>SQLite WAL</span>
+        </div>
+        <div style='display: flex; justify-content: space-between;'>
+            <span style='color: #94A3B8;'>Drift Guard:</span>
+            <span style='color: #14B8A6; font-weight: 600;'>Active (PSI)</span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
 )
+
 
 # -------------------------------------------------------------
 # View 1: System Overview
 # -------------------------------------------------------------
 if nav_choice == "System Overview":
-    st.header("AIOps System Overview & Statistics")
-    st.markdown("Real-time operational health, alert volume, severity breakdown, and system posture.")
+    render_header(
+        title="System Overview & Telemetry",
+        description="Real-time operational health, alert distribution, and cluster anomaly posture.",
+        status_badge="ONLINE - CPU READY",
+        badge_color="#10B981"
+    )
 
     stats = db.get_alert_statistics()
     drift_events = db.get_drift_events(limit=1)
     cur_drift = drift_events[0]["drift_status"] if drift_events else "STABLE"
 
-    # KPI Top Metric Cards
-    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-    with kpi1:
-        st.metric("Total Alerts", stats.get("total_alerts", 0))
-    with kpi2:
-        sev_counts = stats.get("severity_counts", {})
-        crit_high = sev_counts.get("CRITICAL", 0) + sev_counts.get("HIGH", 0)
-        st.metric("Critical / High", crit_high)
-    with kpi3:
-        st.metric("Average Risk Score", f"{stats.get('average_risk_score', 0):.1f} / 100")
-    with kpi4:
-        st.metric("Active Model Version", active_ver)
-    with kpi5:
-        st.metric("Drift Status", cur_drift)
+    drift_color = "#10B981" if cur_drift == "STABLE" else "#F59E0B" if "MODERATE" in cur_drift else "#EF4444"
 
-    st.divider()
+    # Top KPI Metrics Row
+    k1, k2, k3, k4, k5 = st.columns(5)
+    sev_counts = stats.get("severity_counts", {})
+    crit_high = sev_counts.get("CRITICAL", 0) + sev_counts.get("HIGH", 0)
 
-    col_charts1, col_charts2 = st.columns(2)
+    with k1:
+        st.markdown(
+            f"""
+            <div class='metric-card'>
+                <div class='kpi-title'>Total Alerts Recorded</div>
+                <div class='kpi-val'>{stats.get('total_alerts', 0)}</div>
+                <div class='kpi-sub'>All-time persistent traces</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with k2:
+        st.markdown(
+            f"""
+            <div class='metric-card' style='border-top: 3px solid #EF4444;'>
+                <div class='kpi-title'>Critical & High Alerts</div>
+                <div class='kpi-val' style='color: #EF4444;'>{crit_high}</div>
+                <div class='kpi-sub'>Immediate triage required</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with k3:
+        st.markdown(
+            f"""
+            <div class='metric-card'>
+                <div class='kpi-title'>Average Risk Score</div>
+                <div class='kpi-val'>{stats.get('average_risk_score', 0):.1f}<span style='font-size: 14px; color: #94A3B8;'> / 100</span></div>
+                <div class='kpi-sub'>Calibrated sequential & volumetric</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with k4:
+        st.markdown(
+            f"""
+            <div class='metric-card'>
+                <div class='kpi-title'>Active Model Version</div>
+                <div class='kpi-val' style='font-size: 20px; color: #3B82F6;'>{active_ver}</div>
+                <div class='kpi-sub'>{template_count} extracted templates</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with k5:
+        st.markdown(
+            f"""
+            <div class='metric-card' style='border-top: 3px solid {drift_color};'>
+                <div class='kpi-title'>Concept Drift Status</div>
+                <div class='kpi-val' style='font-size: 19px; color: {drift_color};'>{cur_drift}</div>
+                <div class='kpi-sub'>Population Stability Index</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    with col_charts1:
-        st.subheader("Anomaly Severity Distribution")
+    # Chart Section
+    c_chart1, c_chart2 = st.columns(2)
+
+    with c_chart1:
         if sev_counts:
             df_sev = pd.DataFrame(list(sev_counts.items()), columns=["Severity", "Count"])
             color_map = {
-                "CRITICAL": "#dc3545",
-                "HIGH": "#fd7e14",
-                "MEDIUM": "#ffc107",
-                "LOW": "#17a2b8",
+                "CRITICAL": "#EF4444",
+                "HIGH": "#F97316",
+                "MEDIUM": "#F59E0B",
+                "LOW": "#3B82F6",
             }
             fig_pie = px.pie(
                 df_sev,
@@ -175,47 +398,90 @@ if nav_choice == "System Overview":
                 names="Severity",
                 color="Severity",
                 color_discrete_map=color_map,
-                hole=0.45,
+                hole=0.55,
             )
-            fig_pie.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=300)
+            apply_dark_plotly_theme(fig_pie, height=320, title="Anomaly Severity Breakdown")
             st.plotly_chart(fig_pie, use_container_width=True)
         else:
             st.info("No alert records detected yet.")
 
-    with col_charts2:
-        st.subheader("Alert Workflow Status")
+    with c_chart2:
         status_counts = stats.get("status_counts", {})
         if status_counts:
             df_status = pd.DataFrame(list(status_counts.items()), columns=["Status", "Count"])
+            status_colors = {
+                "NEW": "#3B82F6",
+                "ACKNOWLEDGED": "#F59E0B",
+                "RESOLVED": "#10B981"
+            }
             fig_bar = px.bar(
                 df_status,
                 x="Status",
                 y="Count",
                 color="Status",
-                color_discrete_sequence=["#0d6efd", "#ffc107", "#198754"],
+                color_discrete_map=status_colors,
             )
-            fig_bar.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=300)
+            apply_dark_plotly_theme(fig_bar, height=320, title="Operational Triage Workflow Status")
             st.plotly_chart(fig_bar, use_container_width=True)
         else:
             st.info("No alert statuses recorded yet.")
 
-    st.subheader("Recent Operational Alerts")
+    # Recent Operational Alerts Section
+    st.markdown("<div style='font-size: 16px; font-weight: 700; color: #F1F5F9; margin-top: 10px; margin-bottom: 12px;'>Recent Operational Alerts</div>", unsafe_allow_html=True)
     recent_alerts = db.get_alerts(limit=5)
     if recent_alerts:
         for a in recent_alerts:
-            sev_class = a["severity"].lower()
-            with st.expander(f"[{a['severity']}] Session {a['session_id']} | Risk: {a['risk_score']:.1f}/100 | {a['timestamp']}"):
-                st.markdown(f"<div class='explanation-box'>{a['explanation']}</div>", unsafe_allow_html=True)
-                st.caption(f"Source: {a['log_source']} | Sequence Score: {a.get('sequence_score')} | AE Score: {a.get('ae_score')} | Status: {a.get('status')}")
+            sev = a["severity"]
+            sev_badge_class = (
+                "badge-critical" if sev == "CRITICAL"
+                else "badge-high" if sev == "HIGH"
+                else "badge-medium" if sev == "MEDIUM"
+                else "badge-low"
+            )
+            border_color = (
+                "#EF4444" if sev == "CRITICAL"
+                else "#F97316" if sev == "HIGH"
+                else "#F59E0B" if sev == "MEDIUM"
+                else "#3B82F6"
+            )
+
+            with st.expander(f"[{sev}] Session {a['session_id']} | Risk: {a['risk_score']:.1f}/100 | {a['timestamp']}"):
+                st.markdown(
+                    f"""
+                    <div style='background-color: #1B2738; border: 1px solid {border_color}; border-left: 4px solid {border_color}; border-radius: 6px; padding: 14px;'>
+                        <div style='display: flex; justify-content: space-between; align-items: center;'>
+                            <div>
+                                <span class='{sev_badge_class}'>{sev}</span>
+                                <span style='font-weight: 600; color: #F1F5F9; margin-left: 8px;'>Session <code>{a['session_id']}</code></span>
+                                <span style='font-size: 12px; color: #94A3B8; margin-left: 8px;'>Source: {a['log_source']}</span>
+                            </div>
+                            <div style='font-size: 14px; font-weight: 700; color: {border_color};'>Risk Score: {a['risk_score']:.1f}/100</div>
+                        </div>
+                        <div class='explanation-box'>
+                            <div style='font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #3B82F6; margin-bottom: 4px;'>Diagnostic Summary</div>
+                            <div>{a['explanation']}</div>
+                        </div>
+                        <div style='font-size: 11.5px; color: #64748B;'>
+                            Sequence Score: {a.get('sequence_score')} | Autoencoder Score: {a.get('ae_score')} | Status: {a.get('status')} | Logged: {a['timestamp']}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
     else:
         st.info("No recent alerts logged. The system is operating normally.")
+
 
 # -------------------------------------------------------------
 # View 2: Live Log Analyzer & Upload
 # -------------------------------------------------------------
 elif nav_choice == "Live Log Analyzer":
-    st.header("Live Log Analyzer & Real-Time Diagnostics")
-    st.markdown("Analyze raw log messages, test subtle wording variations, and inspect plain-English explanations.")
+    render_header(
+        title="Live Log Analyzer & Real-Time Diagnostics",
+        description="Stream raw log events, inspect multi-model sequential & volumetric signals, and view explainable diagnostics.",
+        status_badge="INFERENCE ENGINE READY",
+        badge_color="#3B82F6"
+    )
 
     scenarios = {
         "HDFS Checksum Corruption Anomaly (Failure Scenario)": {
@@ -254,7 +520,6 @@ elif nav_choice == "Live Log Analyzer":
         },
     }
 
-    # Initialize state so text area and format are never empty on first load
     if "live_scenario" not in st.session_state:
         st.session_state.live_scenario = "HDFS Checksum Corruption Anomaly (Failure Scenario)"
     if "live_log_text" not in st.session_state:
@@ -270,7 +535,7 @@ elif nav_choice == "Live Log Analyzer":
     col_cfg1, col_cfg2 = st.columns([2, 1])
     with col_cfg1:
         st.selectbox(
-            "1. Select Demo Scenario (Auto-fills log lines below):",
+            "1. Select Pre-Configured Test Scenario:",
             list(scenarios.keys()),
             key="live_scenario",
             on_change=on_scenario_selected,
@@ -279,27 +544,27 @@ elif nav_choice == "Live Log Analyzer":
         format_options = ["hdfs", "bgl", "custom"]
         fmt_idx = format_options.index(st.session_state.live_format) if st.session_state.live_format in format_options else 0
         log_type = st.selectbox(
-            "2. Log Parser Format:",
+            "2. Log Parser Target Grammar:",
             format_options,
             index=fmt_idx,
             key="live_format",
         )
 
-    uploaded_file = st.file_uploader("Or Upload Custom Log File (.log, .txt, .csv):", type=["log", "txt", "csv"])
+    uploaded_file = st.file_uploader("Upload External Log File (.log, .txt, .csv):", type=["log", "txt", "csv"])
     if uploaded_file is not None:
         st.session_state.live_log_text = uploaded_file.read().decode("utf-8", errors="ignore")
 
     log_input = st.text_area(
-        "Log Text Stream (Inspect or edit before analyzing):",
+        "Raw Log Stream Buffer (Inspect or modify before detection):",
         key="live_log_text",
         height=180,
     )
 
-    if st.button("Analyze Logs Now", type="primary"):
+    if st.button("Run Real-Time Detection", type="primary"):
         if not log_input.strip():
-            st.error("Please provide log lines to analyze. Select a scenario above or paste your log lines.")
+            st.error("Please provide log lines to analyze. Select a scenario above or upload a log file.")
         else:
-            with st.spinner("Processing logs through Drain3, LSTM and Autoencoder..."):
+            with st.spinner("Processing stream through Drain3, LSTM, Autoencoder, and Drift Monitor..."):
                 loader = get_log_loader(log_type)
                 lines = log_input.strip().splitlines()
                 records = [loader.parse_line(l, line_num=i + 1) for i, l in enumerate(lines) if l.strip()]
@@ -307,24 +572,34 @@ elif nav_choice == "Live Log Analyzer":
                 alerts = pipeline.detect_stream(records, log_type=log_type, persist_alerts=True)
 
             if alerts:
-                st.subheader(f"Detected {len(alerts)} Anomaly Alert(s)")
+                st.markdown(f"<div style='font-size: 16px; font-weight: 700; color: #EF4444; margin-top: 14px; margin-bottom: 12px;'>Detected {len(alerts)} Anomaly Alert(s)</div>", unsafe_allow_html=True)
                 for a in alerts:
                     sev = a["severity"]
                     risk = a["risk_score"]
-                    color = "#dc3545" if sev in ["CRITICAL", "HIGH"] else "#fd7e14" if sev == "MEDIUM" else "#17a2b8"
+                    color = "#EF4444" if sev in ["CRITICAL", "HIGH"] else "#F59E0B" if sev == "MEDIUM" else "#3B82F6"
+                    badge_class = (
+                        "badge-critical" if sev == "CRITICAL"
+                        else "badge-high" if sev == "HIGH"
+                        else "badge-medium" if sev == "MEDIUM"
+                        else "badge-low"
+                    )
 
                     st.markdown(
                         f"""
-                        <div style='border: 1px solid {color}; border-radius: 6px; padding: 14px; margin-bottom: 14px;'>
+                        <div style='background-color: #1B2738; border: 1px solid {color}; border-left: 4px solid {color}; border-radius: 8px; padding: 18px; margin-bottom: 16px;'>
                             <div style='display: flex; justify-content: space-between; align-items: center;'>
-                                <h4>Alert: Session <code>{a['session_id']}</code></h4>
-                                <span style='background-color: {color}; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;'>
-                                    {sev} (Risk: {risk:.1f}/100)
-                                </span>
+                                <div>
+                                    <span class='{badge_class}'>{sev}</span>
+                                    <span style='font-weight: 700; font-size: 15px; color: #F1F5F9; margin-left: 10px;'>Alert: Session <code>{a['session_id']}</code></span>
+                                </div>
+                                <div>
+                                    <span style='font-size: 20px; font-weight: 700; color: {color};'>{risk:.1f}</span>
+                                    <span style='font-size: 12px; color: #94A3B8;'> / 100 Risk Score</span>
+                                </div>
                             </div>
-                            <div class='explanation-box' style='margin-top: 10px;'>
-                                <strong>Plain-English Diagnostic:</strong><br/>
-                                {a['explanation']}
+                            <div class='explanation-box'>
+                                <div style='font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #3B82F6; margin-bottom: 4px;'>Plain-English Diagnostic</div>
+                                <div>{a['explanation']}</div>
                             </div>
                         </div>
                         """,
@@ -332,29 +607,42 @@ elif nav_choice == "Live Log Analyzer":
                     )
 
                     if a["suspicious_events"]:
-                        st.markdown("**Suspicious Log Lines:**")
+                        st.markdown("<div style='font-size: 13px; font-weight: 600; color: #94A3B8; margin-bottom: 6px;'>Suspicious Transition Events:</div>", unsafe_allow_html=True)
                         df_susp = pd.DataFrame(a["suspicious_events"])
                         cols_to_show = [c for c in ["step", "level", "raw_log", "reason"] if c in df_susp.columns]
                         render_table(df_susp[cols_to_show], use_container_width=True)
             else:
-                st.success("Normal System Behavior: No anomalies detected across sequential or volumetric models.")
+                st.markdown(
+                    """
+                    <div style='background-color: #141E2D; border: 1px solid #10B981; border-left: 4px solid #10B981; border-radius: 6px; padding: 16px; margin-top: 14px;'>
+                        <div style='font-weight: 700; color: #10B981;'>Normal System Behavior</div>
+                        <div style='font-size: 13px; color: #94A3B8; margin-top: 4px;'>No transition violations or volumetric count discrepancies detected across the dual neural model detectors.</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
 
 # -------------------------------------------------------------
 # View 3: Alert History & Audit Trail
 # -------------------------------------------------------------
 elif nav_choice == "Alert History & Audit":
-    st.header("Persistent Alert History & Audit Trail")
-    st.markdown("Query, search, filter, and inspect previously detected alerts persisted in SQLite.")
+    render_header(
+        title="Persistent Alert History & Audit Trail",
+        description="Filter, search, inspect, and update the operational lifecycle of all alerts stored in SQLite.",
+        status_badge="AUDIT LOG ACTIVE",
+        badge_color="#3B82F6"
+    )
 
     col_f1, col_f2, col_f3, col_f4 = st.columns(4)
     with col_f1:
-        sev_filter = st.selectbox("Filter Severity:", ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"])
+        sev_filter = st.selectbox("Severity Filter:", ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"])
     with col_f2:
-        status_filter = st.selectbox("Filter Status:", ["ALL", "NEW", "ACKNOWLEDGED", "RESOLVED"])
+        status_filter = st.selectbox("Lifecycle Status:", ["ALL", "NEW", "ACKNOWLEDGED", "RESOLVED"])
     with col_f3:
-        source_filter = st.selectbox("Filter Source:", ["ALL", "hdfs", "bgl", "custom"])
+        source_filter = st.selectbox("Log Source:", ["ALL", "hdfs", "bgl", "custom"])
     with col_f4:
-        search_query = st.text_input("Search Keyword:", placeholder="e.g. timeout, blk_, checksum")
+        search_query = st.text_input("Search Logs / Trace:", placeholder="Keyword (e.g. blk_, checksum, timeout)")
 
     sev_val = None if sev_filter == "ALL" else sev_filter
     stat_val = None if status_filter == "ALL" else status_filter
@@ -369,7 +657,7 @@ elif nav_choice == "Alert History & Audit":
         limit=100
     )
 
-    st.caption(f"Showing {len(alerts_list)} matching alert record(s).")
+    st.markdown(f"<div style='font-size: 12px; color: #64748B; margin-bottom: 8px;'>Matching Records: <strong>{len(alerts_list)}</strong></div>", unsafe_allow_html=True)
 
     if alerts_list:
         table_data = []
@@ -380,35 +668,88 @@ elif nav_choice == "Alert History & Audit":
                 "Session ID": r["session_id"],
                 "Source": r["log_source"],
                 "Severity": r["severity"],
-                "Risk": f"{r['risk_score']:.1f}",
+                "Risk Score": f"{r['risk_score']:.1f}",
                 "Status": r.get("status", "NEW"),
             })
         render_table(pd.DataFrame(table_data), use_container_width=True)
 
-        st.subheader("Alert Deep-Dive Inspection")
+        st.markdown("<div style='font-size: 16px; font-weight: 700; color: #F1F5F9; margin-top: 18px; margin-bottom: 10px;'>Alert Deep-Dive Inspector</div>", unsafe_allow_html=True)
         alert_ids = [r["id"] for r in alerts_list]
-        selected_id = st.selectbox("Select Alert ID to Inspect:", alert_ids)
+        selected_id = st.selectbox("Select Alert Record ID:", alert_ids)
 
         chosen = next((r for r in alerts_list if r["id"] == selected_id), None)
         if chosen:
-            st.markdown(f"### Alert #{chosen['id']} - Session `{chosen['session_id']}`")
-            st.markdown(f"<div class='explanation-box'>{chosen['explanation']}</div>", unsafe_allow_html=True)
+            sev = chosen["severity"]
+            accent = "#EF4444" if sev in ["CRITICAL", "HIGH"] else "#F59E0B" if sev == "MEDIUM" else "#3B82F6"
 
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Risk Score", f"{chosen['risk_score']:.1f} / 100")
-            c2.metric("Severity", chosen["severity"])
-            c3.metric("Sequence Score", f"{chosen.get('sequence_score', 0):.3f}")
-            c4.metric("Autoencoder Score", f"{chosen.get('ae_score', 0):.3f}")
+            st.markdown(
+                f"""
+                <div style='background-color: #1B2738; border: 1px solid #243347; border-left: 4px solid {accent}; border-radius: 8px; padding: 18px; margin-bottom: 14px;'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <div style='font-size: 16px; font-weight: 700; color: #F1F5F9;'>Alert #{chosen['id']} — Session <code>{chosen['session_id']}</code></div>
+                        <div><span style='background-color: {accent}; color: white; padding: 3px 10px; border-radius: 4px; font-weight: 700; font-size: 11px;'>{sev}</span></div>
+                    </div>
+                    <div class='explanation-box'>
+                        <div style='font-size: 11px; font-weight: 700; text-transform: uppercase; color: #3B82F6; margin-bottom: 4px;'>Diagnostic Narrative</div>
+                        <div>{chosen['explanation']}</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-            st.markdown("**Suspicious Events in Trace:**")
+            # Metrics Row
+            d1, d2, d3, d4 = st.columns(4)
+            with d1:
+                st.markdown(
+                    f"""
+                    <div class='metric-card'>
+                        <div class='kpi-title'>Calibrated Risk</div>
+                        <div class='kpi-val' style='color: {accent};'>{chosen['risk_score']:.1f}<span style='font-size: 13px; color: #94A3B8;'> / 100</span></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            with d2:
+                st.markdown(
+                    f"""
+                    <div class='metric-card'>
+                        <div class='kpi-title'>Lifecycle Status</div>
+                        <div class='kpi-val' style='font-size: 18px;'>{chosen.get('status', 'NEW')}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            with d3:
+                st.markdown(
+                    f"""
+                    <div class='metric-card'>
+                        <div class='kpi-title'>Sequence Score (LSTM)</div>
+                        <div class='kpi-val'>{chosen.get('sequence_score', 0):.3f}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            with d4:
+                st.markdown(
+                    f"""
+                    <div class='metric-card'>
+                        <div class='kpi-title'>Autoencoder Score (MSE)</div>
+                        <div class='kpi-val'>{chosen.get('ae_score', 0):.3f}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            st.markdown("<div style='font-size: 13px; font-weight: 600; color: #94A3B8; margin-top: 10px; margin-bottom: 6px;'>Suspicious Transition Events in Trace:</div>", unsafe_allow_html=True)
             if chosen.get("suspicious_events"):
                 render_table(pd.DataFrame(chosen["suspicious_events"]), use_container_width=True)
             else:
-                st.info("No specific single-line transition violations logged.")
+                st.info("No specific single-line transition violations logged for this trace.")
 
-            # Workflow action buttons
-            st.markdown("**Operational Workflow Action:**")
-            col_b1, col_b2, _ = st.columns([1, 1, 3])
+            # Operational Action Buttons
+            st.markdown("<div style='font-size: 13px; font-weight: 600; color: #94A3B8; margin-top: 14px; margin-bottom: 8px;'>Operational Lifecycle Actions:</div>", unsafe_allow_html=True)
+            col_b1, col_b2, _ = st.columns([1.5, 1.5, 4])
             with col_b1:
                 if st.button("Mark Acknowledged", key=f"ack_{chosen['id']}"):
                     db.update_alert_status(chosen["id"], "ACKNOWLEDGED")
@@ -420,85 +761,219 @@ elif nav_choice == "Alert History & Audit":
                     st.success(f"Alert #{chosen['id']} marked as resolved.")
                     st.rerun()
     else:
-        st.info("No alerts match the specified filter criteria.")
+        st.info("No alert records match the specified query filters.")
+
 
 # -------------------------------------------------------------
 # View 4: Concept Drift Monitor
 # -------------------------------------------------------------
 elif nav_choice == "Concept Drift Monitor":
-    st.header("Concept Drift Monitoring & Distribution Shift")
-    st.markdown("Monitors Population Stability Index (PSI) and novel template emergence over time.")
+    render_header(
+        title="Concept Drift Monitoring & Distribution Shift",
+        description="Tracks Population Stability Index (PSI) and novel template ratio over sliding observation windows.",
+        status_badge="STATISTICAL MONITOR ACTIVE",
+        badge_color="#14B8A6"
+    )
 
     drift_records = db.get_drift_events(limit=50)
 
     if drift_records:
         latest = drift_records[0]
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Latest Status", latest["drift_status"])
-        c2.metric("Latest PSI", f"{latest['psi_score']:.4f}")
-        c3.metric("Novel Template Ratio", f"{latest['novel_template_ratio']*100:.1f}%")
-        c4.metric("Evaluations Count", len(drift_records))
+        cur_status = latest["drift_status"]
+        status_color = "#10B981" if cur_status == "STABLE" else "#F59E0B" if "MODERATE" in cur_status else "#EF4444"
 
-        # Plotly PSI Trend Chart
-        df_drift = pd.DataFrame(drift_records)
-        df_drift = df_drift.iloc[::-1]  # Chronological order
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.markdown(
+                f"""
+                <div class='metric-card' style='border-top: 3px solid {status_color};'>
+                    <div class='kpi-title'>Latest Drift Status</div>
+                    <div class='kpi-val' style='font-size: 18px; color: {status_color};'>{cur_status}</div>
+                    <div class='kpi-sub'>Observation window classification</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with m2:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Population Stability Index</div>
+                    <div class='kpi-val'>{latest['psi_score']:.4f}</div>
+                    <div class='kpi-sub'>Threshold: 0.10 Mod / 0.20 Sig</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with m3:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Novel Template Ratio</div>
+                    <div class='kpi-val'>{latest['novel_template_ratio']*100:.1f}%</div>
+                    <div class='kpi-sub'>Unseen log pattern frequency</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with m4:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Evaluations Audited</div>
+                    <div class='kpi-val'>{len(drift_records)}</div>
+                    <div class='kpi-sub'>Historical observation windows</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        # Plotly Time-Series Chart
+        df_drift = pd.DataFrame(drift_records).iloc[::-1]  # Chronological order
 
         fig_psi = go.Figure()
         fig_psi.add_trace(go.Scatter(
             x=df_drift["timestamp"],
             y=df_drift["psi_score"],
             mode="lines+markers",
-            name="PSI Score",
-            line=dict(color="#0d6efd", width=2)
+            name="Observed PSI",
+            line=dict(color="#3B82F6", width=2.5),
+            marker=dict(size=6, color="#3B82F6")
         ))
-        # Add PSI Threshold Lines
-        fig_psi.add_hline(y=0.10, line_dash="dash", line_color="orange", annotation_text="Moderate Drift (0.10)")
-        fig_psi.add_hline(y=0.20, line_dash="dash", line_color="red", annotation_text="Significant Drift (0.20)")
-        fig_psi.update_layout(title="Population Stability Index (PSI) Trend Over Observation Windows", height=350)
+        fig_psi.add_hline(y=0.10, line_dash="dash", line_color="#F59E0B", annotation_text="Moderate Drift (0.10)")
+        fig_psi.add_hline(y=0.20, line_dash="dash", line_color="#EF4444", annotation_text="Significant Drift (0.20)")
+        apply_dark_plotly_theme(fig_psi, height=340, title="Population Stability Index (PSI) Historical Progression")
         st.plotly_chart(fig_psi, use_container_width=True)
 
-        st.subheader("Historical Drift Evaluations Log")
+        st.markdown("<div style='font-size: 15px; font-weight: 700; color: #F1F5F9; margin-top: 14px; margin-bottom: 8px;'>Historical Drift Evaluations Log</div>", unsafe_allow_html=True)
         render_table(
             df_drift[["id", "timestamp", "log_source", "psi_score", "novel_template_ratio", "drift_status"]],
             use_container_width=True
         )
     else:
-        st.info("No drift observations recorded yet. Ingesting live streams will populate drift history.")
+        st.info("No drift observations recorded yet. Live log streams will populate drift history.")
+
 
 # -------------------------------------------------------------
-# View 5: Model Retraining & Refresh
+# View 5: Model Management & Unsupervised Refresh
 # -------------------------------------------------------------
 elif nav_choice == "Model Retraining & Refresh":
-    st.header("Model Management & Unsupervised Refresh")
-    st.markdown("Autonomously adapt models to concept drift using high-confidence pseudo-normal sessions.")
+    render_header(
+        title="Model Management & Unsupervised Adaptation",
+        description="Adapt neural models to concept drift using high-confidence pseudo-normal sessions without manual labels.",
+        status_badge="SELF-TRAINING ENGINE READY",
+        badge_color="#3B82F6"
+    )
 
     active_meta = db.get_active_model_metadata()
     if active_meta:
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Active Model Version", active_meta["version"])
-        m2.metric("Model Type", active_meta["model_type"].upper())
-        m3.metric("Vocabulary Size", active_meta["total_templates"])
-        m4.metric("Calibrated Threshold", f"{active_meta.get('threshold_sequence', 0.5):.3f}")
+        with m1:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Active Model Version</div>
+                    <div class='kpi-val' style='font-size: 20px; color: #3B82F6;'>{active_meta['version']}</div>
+                    <div class='kpi-sub'>Trained: {active_meta.get('trained_at', 'Baseline')}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with m2:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Architecture</div>
+                    <div class='kpi-val' style='font-size: 20px;'>{active_meta['model_type'].upper()}</div>
+                    <div class='kpi-sub'>DeepLog LSTM + Volumetric AE</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with m3:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Vocabulary Dimension</div>
+                    <div class='kpi-val'>{active_meta['total_templates']}</div>
+                    <div class='kpi-sub'>Unique Drain3 templates</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with m4:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Calibrated Threshold</div>
+                    <div class='kpi-val'>{active_meta.get('threshold_sequence', 0.5):.3f}</div>
+                    <div class='kpi-sub'>Optimal F1 decision boundary</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-        st.markdown("**Performance Benchmarks:**")
+        st.markdown("<div style='font-size: 14px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 14px; margin-bottom: 8px;'>Validation Benchmarks</div>", unsafe_allow_html=True)
         mb1, mb2, mb3, mb4 = st.columns(4)
-        mb1.metric("Validation F1", f"{active_meta.get('val_f1', 0)*100:.1f}%")
-        mb2.metric("Validation Precision", f"{active_meta.get('val_precision', 0)*100:.1f}%")
-        mb3.metric("Validation Recall", f"{active_meta.get('val_recall', 0)*100:.1f}%")
-        mb4.metric("Validation FPR", f"{active_meta.get('val_fpr', 0)*100:.1f}%")
+        with mb1:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Validation F1-Score</div>
+                    <div class='kpi-val' style='color: #10B981;'>{active_meta.get('val_f1', 0)*100:.1f}%</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with mb2:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Validation Precision</div>
+                    <div class='kpi-val'>{active_meta.get('val_precision', 0)*100:.1f}%</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with mb3:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Validation Recall</div>
+                    <div class='kpi-val'>{active_meta.get('val_recall', 0)*100:.1f}%</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with mb4:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>False Positive Rate</div>
+                    <div class='kpi-val' style='color: #3B82F6;'>{active_meta.get('val_fpr', 0)*100:.1f}%</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-    st.divider()
-
-    st.subheader("Trigger Unsupervised Model Refresh")
+    st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
     st.markdown(
-        "Upload newly arrived operational logs. The system filters out anomalies (risk >= 30), "
-        "retains pseudo-normal sessions, updates templates, and fine-tunes models without manual labeling."
+        """
+        <div style='background-color: #1B2738; border: 1px solid #243347; border-radius: 8px; padding: 18px;'>
+            <div style='font-size: 15px; font-weight: 700; color: #F1F5F9; margin-bottom: 4px;'>Trigger Unsupervised Model Adaptation</div>
+            <div style='font-size: 12.5px; color: #94A3B8; margin-bottom: 12px;'>
+                Upload or paste operational logs. Sessions with calibrated risk below the threshold are retained as pseudo-normal data.
+                The system updates the template dictionary, replays historical normal data to prevent catastrophic forgetting, and fine-tunes both detectors.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
     refresh_text = st.text_area(
-        "Paste Operational Log Stream for Adaptation:",
-        height=140,
-        placeholder="Paste log stream here..."
+        "Operational Log Stream for Model Adaptation:",
+        height=130,
+        placeholder="Paste newly arrived operational logs here...",
     )
     conf_th = st.slider("Pseudo-Normal Confidence Threshold (Risk < X):", min_value=10.0, max_value=50.0, value=30.0)
 
@@ -506,7 +981,7 @@ elif nav_choice == "Model Retraining & Refresh":
         if not refresh_text.strip():
             st.error("Please provide operational log lines for model adaptation.")
         else:
-            with st.spinner("Filtering pseudo-normal windows and refreshing neural models..."):
+            with st.spinner("Filtering pseudo-normal sessions and updating neural weights..."):
                 loader = get_log_loader("custom")
                 lines = refresh_text.strip().splitlines()
                 recs = [loader.parse_line(l, line_num=i+1) for i, l in enumerate(lines) if l.strip()]
@@ -514,7 +989,7 @@ elif nav_choice == "Model Retraining & Refresh":
 
             if refresh_res.get("status") == "SUCCESS":
                 st.success(
-                    f"Model Refreshed Successfully! New version: `{refresh_res['model_version']}`. "
+                    f"Model Refreshed Successfully. New Version: {refresh_res['model_version']}. "
                     f"Incorporated {refresh_res['pseudo_normal_added']} pseudo-normal sessions "
                     f"({refresh_res['suspicious_excluded']} suspicious sessions safely excluded)."
                 )
@@ -522,28 +997,30 @@ elif nav_choice == "Model Retraining & Refresh":
             else:
                 st.warning(f"Refresh not completed: {refresh_res.get('reason')}")
 
+
 # -------------------------------------------------------------
 # View 6: Benchmark Evaluation (Loghub)
 # -------------------------------------------------------------
 elif nav_choice == "Benchmark Evaluation (Loghub)":
-    st.header("Authentic Dataset Benchmark Evaluation")
-    st.markdown(
-        "Rigorous evaluation on **Loghub HDFS** and **BGL** benchmarks using a **strict chronological split** "
-        "(60% Train, 20% Val, 20% Test) without random shuffling."
+    render_header(
+        title="Loghub Benchmark Dataset Evaluation",
+        description="Rigorous evaluation on Loghub HDFS and BGL benchmarks using strict chronological split (60% Train, 20% Val, 20% Test) without random shuffling.",
+        status_badge="BENCHMARK READY",
+        badge_color="#3B82F6"
     )
 
     col_b1, col_b2, col_b3 = st.columns(3)
     with col_b1:
-        eval_dataset = st.selectbox("Select Benchmark Dataset:", ["hdfs", "bgl"])
+        eval_dataset = st.selectbox("Benchmark Dataset:", ["hdfs", "bgl"])
     with col_b2:
-        max_lines_eval = st.number_input("Evaluation Sample Lines:", min_value=500, max_value=2000, value=1200, step=200)
+        max_lines_eval = st.number_input("Sample Evaluation Lines:", min_value=500, max_value=2000, value=1200, step=200)
     with col_b3:
         st.write("")
         st.write("")
         run_bench_btn = st.button("Run Chronological Benchmark", type="primary")
 
     if run_bench_btn:
-        with st.spinner(f"Running authentic evaluation on {eval_dataset.upper()}..."):
+        with st.spinner(f"Executing authentic chronological benchmark evaluation on {eval_dataset.upper()}..."):
             benchmarks = ensure_benchmarks_available()
             if eval_dataset == "hdfs":
                 loader = get_log_loader("hdfs", labels_file=benchmarks["hdfs_labels"])
@@ -562,24 +1039,53 @@ elif nav_choice == "Benchmark Evaluation (Loghub)":
             )
 
         test_m = train_res["test_metrics"]
-        st.subheader("Test Split Evaluation Results (Unseen 20% Future Data)")
+        st.markdown("<div style='font-size: 16px; font-weight: 700; color: #F1F5F9; margin-top: 14px; margin-bottom: 10px;'>Held-Out Test Split Metrics (Newest 20% Unseen Logs)</div>", unsafe_allow_html=True)
 
         r1, r2, r3, r4 = st.columns(4)
-        r1.metric("Precision", f"{test_m['precision']*100:.1f}%")
-        r2.metric("Recall", f"{test_m['recall']*100:.1f}%")
-        r3.metric("F1-Score", f"{test_m['f1_score']*100:.1f}%", help="Target: >= 90%")
-        r4.metric("False Positive Rate", f"{test_m['false_positive_rate']*100:.1f}%", help="Target: < 10%")
-
-        # Target verification alerts
-        if test_m["f1_score"] >= 0.90:
-            st.success(f"Target F1 Achieved: {test_m['f1_score']*100:.1f}% >= 90.0%")
-        else:
-            st.info(f"F1-Score: {test_m['f1_score']*100:.1f}% (Target: 90%)")
-
-        if test_m["false_positive_rate"] <= 0.10:
-            st.success(f"Target FPR Achieved: {test_m['false_positive_rate']*100:.1f}% <= 10.0%")
-        else:
-            st.warning(f"FPR: {test_m['false_positive_rate']*100:.1f}%")
+        with r1:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Precision</div>
+                    <div class='kpi-val'>{test_m['precision']*100:.1f}%</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with r2:
+            st.markdown(
+                f"""
+                <div class='metric-card'>
+                    <div class='kpi-title'>Recall</div>
+                    <div class='kpi-val'>{test_m['recall']*100:.1f}%</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with r3:
+            f1_color = "#10B981" if test_m["f1_score"] >= 0.90 else "#3B82F6"
+            st.markdown(
+                f"""
+                <div class='metric-card' style='border-top: 3px solid {f1_color};'>
+                    <div class='kpi-title'>F1-Score</div>
+                    <div class='kpi-val' style='color: {f1_color};'>{test_m['f1_score']*100:.1f}%</div>
+                    <div class='kpi-sub'>Target: >= 90.0%</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with r4:
+            fpr_color = "#10B981" if test_m["false_positive_rate"] <= 0.10 else "#F59E0B"
+            st.markdown(
+                f"""
+                <div class='metric-card' style='border-top: 3px solid {fpr_color};'>
+                    <div class='kpi-title'>False Positive Rate</div>
+                    <div class='kpi-val' style='color: {fpr_color};'>{test_m['false_positive_rate']*100:.1f}%</div>
+                    <div class='kpi-sub'>Target: <= 10.0%</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
         # Confusion Matrix Display
         cm = test_m["confusion_matrix"]
@@ -591,12 +1097,17 @@ elif nav_choice == "Benchmark Evaluation (Loghub)":
             index=["Actual Normal (0)", "Actual Anomaly (1)"],
             columns=["Predicted Normal (0)", "Predicted Anomaly (1)"]
         )
-        st.markdown("**Confusion Matrix:**")
+        st.markdown("<div style='font-size: 14px; font-weight: 700; color: #F1F5F9; margin-top: 14px; margin-bottom: 6px;'>Confusion Matrix</div>", unsafe_allow_html=True)
         render_table(cm_df, use_container_width=True)
 
         st.markdown(
-            f"**Split Statistics:** Total Sessions: `{train_res['total_sessions']}` | "
-            f"Train (60%): `{train_res['train_sessions']}` | "
-            f"Val (20%): `{train_res['val_sessions']}` | "
-            f"Test (20%): `{train_res['test_sessions']}`"
+            f"""
+            <div style='background-color: #141E2D; border: 1px solid #243347; border-radius: 6px; padding: 10px 14px; margin-top: 10px; font-size: 12px; color: #94A3B8;'>
+                <strong>Dataset Partition Telemetry:</strong> Total Sessions: <code>{train_res['total_sessions']}</code> | 
+                Train (60%): <code>{train_res['train_sessions']}</code> | 
+                Validation (20%): <code>{train_res['val_sessions']}</code> | 
+                Test (20%): <code>{train_res['test_sessions']}</code>
+            </div>
+            """,
+            unsafe_allow_html=True
         )

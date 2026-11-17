@@ -8,3 +8,11 @@ port = 8501
 enableCORS = false
 enableXsrfProtection = false
 showEmailPrompt = false
+
+[theme]
+base = "dark"
+primaryColor = "#3B82F6"
+backgroundColor = "#101827"
+secondaryBackgroundColor = "#1B2738"
+textColor = "#F1F5F9"
+font = "sans serif"
